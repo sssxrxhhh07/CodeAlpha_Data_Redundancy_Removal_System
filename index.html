@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DataGuard Cloud — Redundancy Removal System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%;background:#070b0f;color:#c8d8e8;font-family:'Share Tech Mono','Courier New',monospace;overflow:hidden}
+  ::-webkit-scrollbar{width:4px;height:4px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#1e3550;border-radius:2px}
+  .raj{font-family:'Rajdhani',sans-serif!important}
+  .mono{font-family:'Share Tech Mono','Courier New',monospace!important}
+  input,select{background:#0c1620;color:#a8c8e8;border:1px solid #1a3048;border-radius:3px;padding:7px 10px;font-size:12px;font-family:'Share Tech Mono','Courier New',monospace;width:100%;outline:none;transition:border-color .15s,box-shadow .15s}
+  input:focus,select:focus{border-color:#2a6090;box-shadow:0 0 0 2px rgba(42,96,144,.2)}
+  input::placeholder{color:#3a5570}
+  select option{background:#0c1620}
+  .btn{cursor:pointer;border:1px solid #1a3048;border-radius:3px;padding:7px 14px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;font-family:'Share Tech Mono','Courier New',monospace;background:#0c1620;color:#6a9aba;transition:all .15s;display:inline-flex;align-items:center;gap:6px}
+  .btn:hover{border-color:#2a6090;color:#8abcde;background:#101e2e}
+  .btn:disabled{opacity:.4;cursor:not-allowed;pointer-events:none}
+  .btn-primary{background:#0a2040;color:#4db8ff;border-color:#1a5080}
+  .btn-primary:hover{background:#0d2a50;border-color:#2a70b0;box-shadow:0 0 10px rgba(42,96,144,.3)}
+  .btn-danger{background:#200a0a;color:#ff6b6b;border-color:#501515}
+  .btn-danger:hover{background:#2a0d0d;border-color:#701818}
+  .btn-amber{background:#1a1000;color:#ffbb33;border-color:#4a3000}
+  .btn-amber:hover{background:#221500;border-color:#5a4000}
+  .tab{cursor:pointer;padding:6px 14px;font-size:10px;letter-spacing:1px;text-transform:uppercase;border:1px solid transparent;border-radius:3px;color:#4a7090;transition:all .15s;font-family:'Share Tech Mono','Courier New',monospace;background:none;white-space:nowrap;flex:1;text-align:center}
+  .tab.active{background:#0c1620;border-color:#1a3a54;color:#6ab0d8}
+  .tab:hover:not(.active){color:#6a9aba}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes scanBar{from{width:0}to{width:100%}}
+  @keyframes blink{50%{opacity:0}}
+  @keyframes barGrow{from{width:0}}
+  .pulse{animation:pulse 1.4s ease-in-out infinite}
+  .blink{animation:blink 1s step-end infinite}
+  .fade-in{animation:fadeIn .25s ease}
+  .slide-in{animation:slideIn .3s ease}
+  .glow-green{box-shadow:0 0 8px rgba(68,238,136,.3)}
+  .glow-red{box-shadow:0 0 8px rgba(255,107,107,.3)}
+  .glow-amber{box-shadow:0 0 8px rgba(255,187,51,.3)}
+  .glow-blue{box-shadow:0 0 8px rgba(77,184,255,.3)}
+  .bar-fill{transition:width .6s cubic-bezier(.16,1,.3,1)}
+  .record-row{border-bottom:1px solid #0f1e2e;transition:background .12s}
+  .record-row:hover{background:#0c1825!important}
+  /* layout */
+  #app{display:grid;grid-template-rows:52px 1fr;height:100vh}
+  #header{background:#040810;border-bottom:1px solid #0f2030;padding:0 24px;display:flex;align-items:center;justify-content:space-between}
+  #main{display:grid;grid-template-columns:320px 1fr;overflow:hidden}
+  #left{background:#040810;border-right:1px solid #0f2030;display:flex;flex-direction:column;overflow:hidden}
+  #right{overflow-y:auto;background:#070b0f}
+  #tab-bar{padding:10px 12px;border-bottom:1px solid #0f2030;display:flex;gap:4px}
+  #tab-content{flex:1;overflow:hidden;display:flex;flex-direction:column}
+  .tab-panel{display:none;flex:1;flex-direction:column;overflow:hidden}
+  .tab-panel.active{display:flex}
+  #submit-scroll{flex:1;overflow-y:auto;padding:14px}
+  #db-inner{flex:1;overflow-y:auto}
+  #log-inner{flex:1;overflow-y:auto}
+  /* right states */
+  #state-idle,#state-scanning,#state-result{display:none}
+  #state-idle.active,#state-scanning.active,#state-result.active{display:flex}
+  #state-idle{flex-direction:column;min-height:100%}
+  #state-scanning{flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:100%}
+  #state-result{flex-direction:column;padding:20px 24px}
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- HEADER -->
+<div id="header">
+  <div style="display:flex;align-items:center;gap:14px">
+    <div style="width:34px;height:34px;background:#040e1a;border:1px solid #1a4060;border-radius:4px;display:flex;align-items:center;justify-content:center;position:relative">
+      <span style="font-size:16px">⬡</span>
+      <div style="position:absolute;top:2px;right:2px;width:5px;height:5px;border-radius:50%;background:#44ee88;box-shadow:0 0 4px #44ee88" class="pulse"></div>
+    </div>
+    <div>
+      <div class="raj" style="font-size:16px;font-weight:700;color:#a8d8f8;letter-spacing:2px;text-transform:uppercase">DataGuard <span style="color:#44ee88">Cloud</span></div>
+      <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:3px;text-transform:uppercase">Redundancy Removal System v2.0</div>
+    </div>
+  </div>
+  <div style="display:flex;gap:20px;align-items:center">
+    <div style="text-align:center"><div class="raj" style="font-size:20px;font-weight:700;color:#4db8ff">▣ <span id="h-total">5</span></div><div class="mono" style="font-size:8px;color:#2a5070;letter-spacing:1.5px">TOTAL RECORDS</div></div>
+    <div style="text-align:center"><div class="raj" style="font-size:20px;font-weight:700;color:#44ee88">+ <span id="h-added">0</span></div><div class="mono" style="font-size:8px;color:#2a5070;letter-spacing:1.5px">APPENDED</div></div>
+    <div style="text-align:center"><div class="raj" style="font-size:20px;font-weight:700;color:#ff6b6b">⊗ <span id="h-blocked">0</span></div><div class="mono" style="font-size:8px;color:#2a5070;letter-spacing:1.5px">BLOCKED</div></div>
+    <div style="text-align:center"><div class="raj" style="font-size:20px;font-weight:700;color:#ffbb33">◎ <span id="h-flagged">0</span></div><div class="mono" style="font-size:8px;color:#2a5070;letter-spacing:1.5px">FLAGGED</div></div>
+    <div style="width:1px;height:28px;background:#0f2030"></div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <div style="width:6px;height:6px;border-radius:50%;background:#44ee88;box-shadow:0 0 6px #44ee88" class="pulse"></div>
+      <span class="mono" style="font-size:10px;color:#2a7040;letter-spacing:1px">LIVE</span>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div id="main">
+
+  <!-- LEFT PANEL -->
+  <div id="left">
+    <div id="tab-bar">
+      <button class="tab active" onclick="switchTab('submit')" id="tab-submit">◈ Submit</button>
+      <button class="tab" onclick="switchTab('database')" id="tab-database">⊞ Database</button>
+      <button class="tab" onclick="switchTab('log')" id="tab-log">≡ Audit Log</button>
+    </div>
+
+    <div id="tab-content">
+
+      <!-- SUBMIT TAB -->
+      <div class="tab-panel active" id="panel-submit">
+        <div id="submit-scroll">
+          <div style="display:flex;gap:5px;margin-bottom:14px">
+            <button class="btn" style="flex:1;font-size:10px" onclick="fillRandom()">⚙ Random</button>
+            <button class="btn btn-danger" style="flex:1;font-size:10px" onclick="fillDuplicate()">⊗ Clone Exact</button>
+            <button class="btn btn-amber" style="flex:1;font-size:10px" onclick="fillNearDuplicate()">⚠ Near Clone</button>
+          </div>
+
+          <div style="margin-bottom:10px">
+            <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Instance ID</label>
+            <input id="f-instanceId" placeholder="i-0a1b2c3d4e5f" oninput="previewHash()"/>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+            <div>
+              <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">CPU Usage (%)</label>
+              <input id="f-cpuUsage" type="number" min="0" max="100" placeholder="0–100" oninput="previewHash()"/>
+            </div>
+            <div>
+              <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Memory Usage (%)</label>
+              <input id="f-memoryUsage" type="number" min="0" max="100" placeholder="0–100" oninput="previewHash()"/>
+            </div>
+          </div>
+          <div style="margin-bottom:10px">
+            <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Storage (GB)</label>
+            <input id="f-storageGB" type="number" min="0" placeholder="e.g. 120" oninput="previewHash()"/>
+          </div>
+          <div style="margin-bottom:10px">
+            <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Region</label>
+            <select id="f-region" onchange="previewHash()">
+              <option>us-east-1</option><option>us-west-2</option><option>eu-west-2</option>
+              <option>eu-central-1</option><option>ap-south-1</option><option>ap-southeast-1</option>
+              <option>sa-east-1</option><option>ca-central-1</option>
+            </select>
+          </div>
+          <div style="margin-bottom:10px">
+            <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Service</label>
+            <select id="f-service" onchange="previewHash()">
+              <option>EC2</option><option>Lambda</option><option>RDS</option><option>S3</option>
+              <option>ECS</option><option>EKS</option><option>CloudFront</option><option>DynamoDB</option>
+            </select>
+          </div>
+          <div style="margin-bottom:10px">
+            <label class="mono" style="font-size:10px;color:#2a6080;display:block;margin-bottom:4px;letter-spacing:1px;text-transform:uppercase">Status</label>
+            <select id="f-status" onchange="previewHash()">
+              <option>running</option><option>stopped</option><option>pending</option><option>terminated</option>
+            </select>
+          </div>
+
+          <div id="hash-preview" style="display:none;background:#0a1620;border:1px solid #0f2030;border-radius:3px;padding:8px 10px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center">
+            <span class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1px">PREVIEW HASH</span>
+            <span class="mono" id="hash-val" style="font-size:11px;color:#2a8060"></span>
+          </div>
+
+          <button class="btn btn-primary" id="btn-validate" style="width:100%;padding:10px;font-size:12px;justify-content:center" onclick="handleValidate()">
+            ⬡ Validate &amp; Submit Record
+          </button>
+        </div>
+      </div>
+
+      <!-- DATABASE TAB -->
+      <div class="tab-panel" id="panel-database">
+        <div style="padding:10px 12px;border-bottom:1px solid #0f2030;flex-shrink:0">
+          <input id="db-search" placeholder="Search instance, service, region..." style="margin-bottom:8px" oninput="renderDB()"/>
+          <div style="display:flex;gap:6px;align-items:center;justify-content:space-between">
+            <span class="mono" style="font-size:10px;color:#2a5070" id="db-count">5/5 records</span>
+            <button class="btn btn-danger" style="font-size:10px;padding:4px 10px" onclick="handlePurge()">⊗ Purge Duplicates</button>
+          </div>
+        </div>
+        <div id="db-inner"></div>
+      </div>
+
+      <!-- LOG TAB -->
+      <div class="tab-panel" id="panel-log">
+        <div style="padding:8px 12px;border-bottom:1px solid #0f2030;display:flex;justify-content:space-between;align-items:center;flex-shrink:0">
+          <span class="mono" style="font-size:10px;color:#2a5070" id="log-count">0 events</span>
+          <button class="btn" style="font-size:9px;padding:3px 8px" onclick="clearLog()">Clear</button>
+        </div>
+        <div id="log-inner"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div id="right">
+
+    <!-- IDLE STATE -->
+    <div id="state-idle" class="active">
+      <div style="padding:20px 24px 0">
+        <div class="raj" style="font-size:12px;color:#2a5070;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px">Database Analytics</div>
+        <div id="analytics-cards" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+          <div style="background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:14px 16px">
+            <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px">Services</div>
+            <div id="analytics-services"></div>
+          </div>
+          <div style="background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:14px 16px">
+            <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px">Instance Status</div>
+            <div id="analytics-status"></div>
+          </div>
+        </div>
+        <div id="outcomes-card" style="display:none;background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:14px 16px;margin-bottom:20px">
+          <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:12px">Validation Outcomes</div>
+          <div id="outcomes-bar" style="display:flex;gap:3px;height:16px;border-radius:3px;overflow:hidden;margin-bottom:8px"></div>
+          <div id="outcomes-legend" style="display:flex;gap:14px"></div>
+        </div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:40px">
+        <div style="text-align:center">
+          <div class="raj" style="font-size:48px;color:#0f2030">⬡</div>
+          <div class="mono" style="font-size:11px;color:#2a4060;margin-top:8px;letter-spacing:2px">AWAITING RECORD SUBMISSION</div>
+          <div class="mono" style="font-size:10px;color:#1a3050;margin-top:4px">Submit a record to see validation results</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SCANNING STATE -->
+    <div id="state-scanning">
+      <div style="position:relative;width:80px;height:80px">
+        <div style="position:absolute;inset:0;border:2px solid #0f2030;border-radius:50%"></div>
+        <div id="spinner1" style="position:absolute;inset:0;border:2px solid transparent;border-top-color:#2a8090;border-radius:50%;animation:spin .7s linear infinite"></div>
+        <div id="spinner2" style="position:absolute;inset:10px;border:1px solid transparent;border-top-color:#1a5060;border-radius:50%;animation:spin 1.2s linear infinite reverse"></div>
+        <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center">
+          <span class="raj" style="font-size:18px;color:#2a8090">⬡</span>
+        </div>
+      </div>
+      <div>
+        <div class="raj" style="font-size:14px;color:#4a9aba;letter-spacing:3px;text-transform:uppercase;text-align:center;margin-bottom:12px">Scanning Database</div>
+        <div style="width:280px;height:2px;background:#0a1828;border-radius:1px;overflow:hidden;margin-bottom:16px">
+          <div id="scan-progress" style="height:100%;background:linear-gradient(90deg,transparent,#2a8090);border-radius:1px;width:0;animation:scanBar 1s ease-out forwards"></div>
+        </div>
+        <div id="scan-steps" style="display:flex;flex-direction:column;gap:6px;align-items:center"></div>
+      </div>
+    </div>
+
+    <!-- RESULT STATE -->
+    <div id="state-result" style="flex-direction:column;padding:20px 24px"></div>
+
+  </div>
+</div>
+</div>
+
+<script>
+/* ─── Data ─── */
+const INITIAL_DB = [
+  {id:"rec_001",timestamp:"2024-03-15T08:23:11Z",instanceId:"i-0a1b2c3d4e",region:"us-east-1",cpuUsage:72.4,memoryUsage:58.1,storageGB:120,status:"running",service:"EC2",hash:"a3f9e2b1"},
+  {id:"rec_002",timestamp:"2024-03-15T09:10:44Z",instanceId:"i-5f6g7h8i9j",region:"eu-west-2",cpuUsage:45.2,memoryUsage:81.3,storageGB:200,status:"running",service:"Lambda",hash:"b7c4d8e2"},
+  {id:"rec_003",timestamp:"2024-03-15T10:05:22Z",instanceId:"i-k1l2m3n4o5",region:"ap-south-1",cpuUsage:91.7,memoryUsage:76.5,storageGB:500,status:"stopped",service:"RDS",hash:"c1d5f9a3"},
+  {id:"rec_004",timestamp:"2024-03-15T11:33:07Z",instanceId:"i-p6q7r8s9t0",region:"us-west-2",cpuUsage:33.8,memoryUsage:42.0,storageGB:80,status:"running",service:"S3",hash:"d4e8b2f6"},
+  {id:"rec_005",timestamp:"2024-03-15T12:18:55Z",instanceId:"i-u1v2w3x4y5",region:"sa-east-1",cpuUsage:60.1,memoryUsage:67.9,storageGB:350,status:"running",service:"ECS",hash:"e7f1c5a9"},
+];
+let db = JSON.parse(JSON.stringify(INITIAL_DB));
+let auditLog = [];
+let stats = {added:0, blocked:0, falsePos:0};
+
+const FIELD_WEIGHTS = {instanceId:.35,region:.15,service:.15,cpuUsage:.1,memoryUsage:.1,storageGB:.1,status:.05};
+const REGIONS  = ["us-east-1","us-west-2","eu-west-2","eu-central-1","ap-south-1","ap-southeast-1","sa-east-1","ca-central-1"];
+const SERVICES = ["EC2","Lambda","RDS","S3","ECS","EKS","CloudFront","DynamoDB"];
+const STATUSES = ["running","stopped","pending","terminated"];
+const STATUS_COLOR = {running:"#44ee88",stopped:"#ff6b6b",pending:"#ffbb33",terminated:"#888"};
+const BADGE = {
+  exact_duplicate:{bg:"#1a0a0a",color:"#ff6b6b",border:"#5a1515",label:"Exact Duplicate",icon:"⊗",glow:"glow-red"},
+  near_duplicate: {bg:"#1a1100",color:"#ffbb33",border:"#5a3d00",label:"Near Duplicate", icon:"⚠",glow:"glow-amber"},
+  false_positive: {bg:"#061520",color:"#4db8ff",border:"#0d3a5a",label:"False Positive", icon:"◎",glow:"glow-blue"},
+  unique:         {bg:"#081510",color:"#44ee88",border:"#0d4020",label:"Unique",          icon:"✓",glow:"glow-green"},
+};
+
+/* ─── Hash & Similarity ─── */
+function computeHash(r){
+  const s=`${r.instanceId}|${r.region}|${r.service}|${Math.round(r.cpuUsage)}|${Math.round(r.memoryUsage)}|${r.storageGB}|${r.status}`;
+  let h=0; for(let i=0;i<s.length;i++)h=((h<<5)-h+s.charCodeAt(i))|0;
+  return Math.abs(h).toString(16).slice(0,8);
+}
+function similarityScore(a,b){
+  let s=0;
+  if(a.instanceId===b.instanceId)s+=FIELD_WEIGHTS.instanceId;
+  if(a.region===b.region)s+=FIELD_WEIGHTS.region;
+  if(a.service===b.service)s+=FIELD_WEIGHTS.service;
+  if(Math.abs(a.cpuUsage-b.cpuUsage)<5)s+=FIELD_WEIGHTS.cpuUsage;
+  if(Math.abs(a.memoryUsage-b.memoryUsage)<5)s+=FIELD_WEIGHTS.memoryUsage;
+  if(a.storageGB===b.storageGB)s+=FIELD_WEIGHTS.storageGB;
+  if(a.status===b.status)s+=FIELD_WEIGHTS.status;
+  return s;
+}
+function classifyRecord(rec){
+  const h=computeHash(rec);
+  const exact=db.find(r=>r.hash===h);
+  if(exact)return{type:"exact_duplicate",score:1.0,matchId:exact.id,reason:"Identical hash — all fields match exactly."};
+  let best={score:0,id:null};
+  for(const r of db){const sc=similarityScore(rec,r);if(sc>best.score)best={score:sc,id:r.id};}
+  if(best.score>=.75)return{type:"near_duplicate",score:best.score,matchId:best.id,reason:`${Math.round(best.score*100)}% field overlap with existing record.`};
+  if(best.score>=.45)return{type:"false_positive",score:best.score,matchId:best.id,reason:`Partial match (${Math.round(best.score*100)}%) — likely distinct with shared attributes.`};
+  return{type:"unique",score:best.score,matchId:best.id,reason:"No significant overlap detected. Record is unique."};
+}
+
+/* ─── Helpers ─── */
+function generateId(){return"i-"+Math.random().toString(36).slice(2,12);}
+function generateRecId(){return"rec_"+String(db.length+1).padStart(3,"0");}
+function fmt(ts){return new Date(ts).toLocaleTimeString([],{hour:"2-digit",minute:"2-digit",second:"2-digit"});}
+function fmtFull(ts){return new Date(ts).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function getForm(){
+  return{
+    instanceId:document.getElementById("f-instanceId").value.trim(),
+    region:document.getElementById("f-region").value,
+    service:document.getElementById("f-service").value,
+    status:document.getElementById("f-status").value,
+    cpuUsage:parseFloat(document.getElementById("f-cpuUsage").value),
+    memoryUsage:parseFloat(document.getElementById("f-memoryUsage").value),
+    storageGB:parseInt(document.getElementById("f-storageGB").value),
+  };
+}
+function setForm(f){
+  document.getElementById("f-instanceId").value=f.instanceId||"";
+  document.getElementById("f-region").value=f.region||"us-east-1";
+  document.getElementById("f-service").value=f.service||"EC2";
+  document.getElementById("f-status").value=f.status||"running";
+  document.getElementById("f-cpuUsage").value=f.cpuUsage||"";
+  document.getElementById("f-memoryUsage").value=f.memoryUsage||"";
+  document.getElementById("f-storageGB").value=f.storageGB||"";
+  previewHash();
+}
+
+/* ─── Quick Fill ─── */
+function fillRandom(){setForm({instanceId:generateId(),region:pick(REGIONS),service:pick(SERVICES),status:pick(STATUSES),cpuUsage:(Math.random()*100).toFixed(1),memoryUsage:(Math.random()*100).toFixed(1),storageGB:pick([80,120,200,350,500])});}
+function fillDuplicate(){const src=pick(db);setForm({...src});}
+function fillNearDuplicate(){const src=pick(db);setForm({...src,cpuUsage:(src.cpuUsage+(Math.random()*8-4)).toFixed(1),memoryUsage:(src.memoryUsage+(Math.random()*8-4)).toFixed(1)});}
+
+/* ─── Hash Preview ─── */
+function previewHash(){
+  const f=getForm();
+  const el=document.getElementById("hash-preview");
+  if(f.instanceId){
+    const h=computeHash({...f,cpuUsage:f.cpuUsage||0,memoryUsage:f.memoryUsage||0,storageGB:f.storageGB||0});
+    document.getElementById("hash-val").textContent="#"+h;
+    el.style.display="flex";
+  }else{el.style.display="none";}
+}
+
+/* ─── Tab switching ─── */
+function switchTab(name){
+  ["submit","database","log"].forEach(t=>{
+    document.getElementById("tab-"+t).classList.toggle("active",t===name);
+    document.getElementById("panel-"+t).classList.toggle("active",t===name);
+  });
+  if(name==="database")renderDB();
+  if(name==="log")renderLog();
+}
+
+/* ─── Header counters ─── */
+function updateHeader(){
+  document.getElementById("h-total").textContent=db.length;
+  document.getElementById("h-added").textContent=stats.added;
+  document.getElementById("h-blocked").textContent=stats.blocked;
+  document.getElementById("h-flagged").textContent=stats.falsePos;
+}
+
+/* ─── Right panel states ─── */
+function showState(name){
+  ["idle","scanning","result"].forEach(s=>{
+    const el=document.getElementById("state-"+s);
+    el.classList.toggle("active",s===name);
+    el.style.display=s===name?(s==="idle"?"flex":s==="scanning"?"flex":"flex"):"none";
+  });
+}
+
+/* ─── Analytics ─── */
+function renderAnalytics(){
+  const avgCpu=(db.reduce((a,r)=>a+r.cpuUsage,0)/db.length).toFixed(1);
+  const avgMem=(db.reduce((a,r)=>a+r.memoryUsage,0)/db.length).toFixed(1);
+  const bySvc={},bySt={};
+  db.forEach(r=>{bySvc[r.service]=(bySvc[r.service]||0)+1;bySt[r.status]=(bySt[r.status]||0)+1;});
+
+  // metric cards
+  const cards=[
+    {label:"Avg CPU",value:avgCpu+"%",color:"#4db8ff",bar:avgCpu},
+    {label:"Avg Memory",value:avgMem+"%",color:"#44ee88",bar:avgMem},
+    {label:"Services",value:Object.keys(bySvc).length,color:"#ffbb33",bar:null},
+    {label:"Regions",value:new Set(db.map(r=>r.region)).size,color:"#cc88ff",bar:null},
+  ];
+  document.getElementById("analytics-cards").innerHTML=cards.map(c=>`
+    <div style="background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:12px 14px">
+      <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">${c.label}</div>
+      <div class="raj" style="font-size:22px;font-weight:700;color:${c.color}">${c.value}</div>
+      ${c.bar!==null?`<div style="height:2px;background:#0f2030;border-radius:1px;margin-top:8px"><div style="height:100%;width:${Math.min(c.bar,100)}%;background:${c.color};border-radius:1px;box-shadow:0 0 6px ${c.color};transition:width .6s"></div></div>`:""}
+    </div>`).join("");
+
+  // services
+  const svcEntries=Object.entries(bySvc).sort((a,b)=>b[1]-a[1]);
+  document.getElementById("analytics-services").innerHTML=svcEntries.map(([s,n])=>`
+    <div style="margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span class="mono" style="font-size:10px;color:#5a9aba">${s}</span>
+        <span class="mono" style="font-size:10px;color:#2a5070">${n}</span>
+      </div>
+      <div style="height:3px;background:#0a1828;border-radius:2px">
+        <div style="height:100%;width:${(n/db.length)*100}%;background:#1a5080;border-radius:2px;box-shadow:0 0 4px #1a5080;transition:width .6s"></div>
+      </div>
+    </div>`).join("");
+
+  // status
+  const stEntries=Object.entries(bySt).sort((a,b)=>b[1]-a[1]);
+  document.getElementById("analytics-status").innerHTML=stEntries.map(([s,n])=>`
+    <div style="margin-bottom:7px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+        <span class="mono" style="font-size:10px;color:${STATUS_COLOR[s]||"#888"}">● ${s}</span>
+        <span class="mono" style="font-size:10px;color:#2a5070">${n}</span>
+      </div>
+      <div style="height:3px;background:#0a1828;border-radius:2px">
+        <div style="height:100%;width:${(n/db.length)*100}%;background:${STATUS_COLOR[s]||"#888"};border-radius:2px;opacity:.7;transition:width .6s"></div>
+      </div>
+    </div>`).join("");
+
+  // outcomes
+  const total=stats.added+stats.blocked+stats.falsePos;
+  const oCard=document.getElementById("outcomes-card");
+  if(total>0){
+    oCard.style.display="block";
+    const outcomes=[{v:stats.added,c:"#1a6030",label:"Unique"},{v:stats.blocked,c:"#602020",label:"Blocked"},{v:stats.falsePos,c:"#604010",label:"Flagged"}];
+    document.getElementById("outcomes-bar").innerHTML=outcomes.filter(o=>o.v>0).map(o=>`<div style="width:${(o.v/total)*100}%;background:${o.c};transition:width .5s" title="${o.label}: ${o.v}"></div>`).join("");
+    const lgColors={Unique:"#44ee88",Blocked:"#ff6b6b",Flagged:"#ffbb33"};
+    document.getElementById("outcomes-legend").innerHTML=outcomes.map(o=>`<div style="display:flex;align-items:center;gap:5px"><div style="width:6px;height:6px;border-radius:50%;background:${lgColors[o.label]}"></div><span class="mono" style="font-size:9px;color:#3a6080">${o.label}: ${o.v}</span></div>`).join("");
+  }else{oCard.style.display="none";}
+}
+
+/* ─── Database panel ─── */
+function renderDB(){
+  const q=(document.getElementById("db-search").value||"").toLowerCase();
+  const filtered=db.filter(r=>!q||r.instanceId.includes(q)||r.service.toLowerCase().includes(q)||r.region.includes(q));
+  document.getElementById("db-count").textContent=`${filtered.length}/${db.length} records`;
+  document.getElementById("db-inner").innerHTML=filtered.length===0
+    ?`<div class="mono" style="padding:24px;text-align:center;color:#2a4060">No matching records</div>`
+    :filtered.map((r,i)=>`
+      <div class="record-row" style="padding:9px 12px;background:${i%2===0?"#040810":"#050c14"}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span class="mono" style="font-size:11px;color:#4a90b8;font-weight:600">${r.id}</span>
+          <div style="display:flex;gap:5px;align-items:center">
+            <span class="mono" style="font-size:9px;background:#081828;color:#3a80a8;padding:2px 6px;border-radius:2px;border:1px solid #1a3048">${r.service}</span>
+            <button class="btn" style="padding:2px 6px;font-size:9px;color:#ff4444;border:1px solid #301010" onclick="deleteRecord('${r.id}')">✕</button>
+          </div>
+        </div>
+        <div class="mono" style="font-size:11px;color:#6a9aba;margin-bottom:3px">${r.instanceId}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <span class="mono" style="font-size:10px;color:#2a6080">⬡ ${r.region}</span>
+          <span class="mono" style="font-size:10px;color:${STATUS_COLOR[r.status]||"#888"}">● ${r.status}</span>
+          <span class="mono" style="font-size:10px;color:#2a5070">CPU ${r.cpuUsage}%</span>
+          <span class="mono" style="font-size:10px;color:#2a5070">MEM ${r.memoryUsage}%</span>
+          <span class="mono" style="font-size:10px;color:#1a3a50">#${r.hash}</span>
+        </div>
+        <div class="mono" style="font-size:9px;color:#1a3a50;margin-top:3px">${fmtFull(r.timestamp)}</div>
+      </div>`).join("");
+}
+function deleteRecord(id){db=db.filter(r=>r.id!==id);renderDB();updateHeader();renderAnalytics();}
+
+/* ─── Audit Log ─── */
+function renderLog(){
+  document.getElementById("log-count").textContent=`${auditLog.length} events`;
+  const el=document.getElementById("log-inner");
+  if(auditLog.length===0){el.innerHTML=`<div class="mono" style="padding:24px;text-align:center;color:#2a4060">No events recorded yet</div>`;return;}
+  el.innerHTML=auditLog.map(e=>{
+    const b=BADGE[e.type]||{color:"#6a9aba",label:"System",icon:"◈"};
+    const dot=e.type==="exact_duplicate"?"#ff4444":e.type==="near_duplicate"?"#ffaa00":e.type==="false_positive"?"#2299ee":e.type==="unique"?"#33cc66":"#6a9aba";
+    return`<div class="slide-in record-row" style="padding:8px 12px;border-bottom:1px solid #0a1820">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+        <span class="mono" style="font-size:11px;color:#5a9aba;font-weight:600">${e.instanceId}</span>
+        <div style="display:flex;align-items:center;gap:5px">
+          <div style="width:5px;height:5px;border-radius:50%;background:${dot};box-shadow:0 0 4px ${dot}"></div>
+          <span class="mono" style="font-size:9px;color:${b.color}">${b.label||"SYSTEM"}</span>
+        </div>
+      </div>
+      <div class="mono" style="font-size:10px;color:#2a5070">${e.service} · ${e.region} · ${fmt(e.time)}${e.type!=="cleanup"?` <span style="color:#3a6080">${Math.round(e.score*100)}% sim</span>`:""}</div>
+    </div>`;
+  }).join("");
+}
+function clearLog(){auditLog=[];renderLog();}
+
+/* ─── Scan animation ─── */
+let scanTimer=null;
+function startScan(){
+  const steps=["Hash fingerprint check","Exact match detection","Similarity scoring","Near-duplicate analysis"];
+  const el=document.getElementById("scan-steps");
+  el.innerHTML=steps.map(s=>`<div class="mono" style="display:flex;align-items:center;gap:8px;font-size:10px;color:#2a4060"><span>▷</span><span>${s}</span></div>`).join("");
+  document.getElementById("scan-progress").style.cssText="height:100%;background:linear-gradient(90deg,transparent,#2a8090);border-radius:1px;width:0;animation:scanBar 1s ease-out forwards";
+  let step=0;
+  scanTimer=setInterval(()=>{
+    if(step<steps.length){
+      const rows=el.querySelectorAll("div");
+      if(rows[step]){rows[step].innerHTML=`<span style="color:#44ee88">✓</span><span style="color:#2a6040">${steps[step]}</span>`;}
+      step++;
+    }
+  },220);
+}
+function stopScan(){clearInterval(scanTimer);}
+
+/* ─── Validate & Submit ─── */
+async function handleValidate(){
+  const f=getForm();
+  if(!f.instanceId||isNaN(f.cpuUsage)||isNaN(f.memoryUsage)||isNaN(f.storageGB))return;
+  const btn=document.getElementById("btn-validate");
+  btn.disabled=true; btn.innerHTML="<span class='pulse'>⬡</span> Scanning Database...";
+  showState("scanning"); startScan();
+
+  await new Promise(r=>setTimeout(r,1100));
+  stopScan();
+  f.hash=computeHash(f);
+  const cls=classifyRecord(f);
+  const b=BADGE[cls.type];
+
+  // update stats
+  if(cls.type==="unique"){db.push({...f,id:generateRecId(),timestamp:new Date().toISOString()});stats.added++;}
+  else if(cls.type==="false_positive"){stats.falsePos++;}
+  else{stats.blocked++;}
+
+  // audit entry
+  auditLog.unshift({time:new Date().toISOString(),instanceId:f.instanceId,service:f.service,region:f.region,type:cls.type,score:cls.score});
+  auditLog=auditLog.slice(0,100);
+  updateHeader(); renderAnalytics();
+
+  // build field weight analysis
+  const matchRec=cls.matchId?db.find(r=>r.id===cls.matchId):null;
+  function fieldMatch(field){
+    if(!matchRec)return null;
+    if(field==="instanceId")return f.instanceId===matchRec.instanceId;
+    if(field==="region")return f.region===matchRec.region;
+    if(field==="service")return f.service===matchRec.service;
+    if(field==="cpuUsage")return Math.abs(f.cpuUsage-matchRec.cpuUsage)<5;
+    if(field==="memoryUsage")return Math.abs(f.memoryUsage-matchRec.memoryUsage)<5;
+    if(field==="storageGB")return f.storageGB===matchRec.storageGB;
+    if(field==="status")return f.status===matchRec.status;
+    return null;
+  }
+
+  const actionLabel=cls.type==="unique"?"✓ APPENDED TO DATABASE":cls.type==="exact_duplicate"?"⊗ BLOCKED — EXACT DUPLICATE":cls.type==="near_duplicate"?"⊗ BLOCKED — NEAR DUPLICATE":"⚠ FLAGGED FOR REVIEW";
+  const matchedBadge=cls.matchId?`<span class="mono" style="font-size:10px;background:rgba(0,0,0,.3);color:${b.color};padding:3px 8px;border-radius:2px;border:1px solid ${b.border}">MATCHED: ${cls.matchId}</span>`:"";
+
+  const fieldWeightHTML=Object.entries(FIELD_WEIGHTS).map(([field,w])=>{
+    const m=fieldMatch(field);
+    const barColor=m===null?"#1a5080":m?"#1a6030":"#601010";
+    const barGlow=m===null?"none":m?"0 0 4px #1a6030":"0 0 4px #601010";
+    const icon=m!==null?`<span style="font-size:10px;color:${m?"#44ee88":"#ff4444"};width:10px">${m?"✓":"✗"}</span>`:"";
+    return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div class="mono" style="width:80px;font-size:9px;color:#2a5070;flex-shrink:0">${field}</div>
+      <div style="flex:1;height:4px;background:#0a1828;border-radius:2px;overflow:hidden">
+        <div style="height:100%;width:${w*100}%;background:${barColor};border-radius:2px;box-shadow:${barGlow};transition:width .6s"></div>
+      </div>
+      <div class="mono" style="width:24px;font-size:9px;color:#1a4060;text-align:right">${Math.round(w*100)}%</div>
+      ${icon}
+    </div>`;
+  }).join("");
+
+  const matchCompare=matchRec?`
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid #0f2030">
+      <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1px;margin-bottom:6px">MATCHED RECORD: ${matchRec.id}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+        ${[["CPU",matchRec.cpuUsage+"%"],["MEM",matchRec.memoryUsage+"%"],["SVC",matchRec.service],["REG",matchRec.region]].map(([k,v])=>`<div class="mono" style="font-size:9px;color:#3a6080"><span style="color:#1a4060">${k}: </span>${v}</div>`).join("")}
+      </div>
+    </div>`:"";
+
+  const recDetails=[
+    ["INSTANCE",f.instanceId],["SERVICE",f.service],["REGION",f.region],["STATUS",f.status],
+    ["CPU",f.cpuUsage+"%"],["MEMORY",f.memoryUsage+"%"],["STORAGE",f.storageGB+" GB"],["HASH","#"+f.hash],
+  ].map(([k,v])=>`<div style="background:#070e18;border-radius:3px;padding:6px 8px"><div class="mono" style="font-size:8px;color:#1a4060;letter-spacing:1px;margin-bottom:2px">${k}</div><div class="mono" style="font-size:10px;color:#5a9aba;word-break:break-all">${v}</div></div>`).join("");
+
+  const html=`<div class="fade-in">
+    <div style="background:${b.bg};border:1px solid ${b.border};border-radius:4px;padding:16px 20px;margin-bottom:14px" class="${b.glow}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="raj" style="font-size:28px;color:${b.color}">${b.icon}</span>
+          <div>
+            <div class="raj" style="font-size:16px;font-weight:700;color:${b.color};letter-spacing:2px;text-transform:uppercase">${b.label}</div>
+            <div class="mono" style="font-size:10px;color:${b.color};opacity:.7">${cls.reason}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div class="raj" style="font-size:32px;font-weight:700;color:${b.color};line-height:1">${Math.round(cls.score*100)}%</div>
+          <div class="mono" style="font-size:8px;color:${b.color};opacity:.6;letter-spacing:1.5px">SIMILARITY</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <span class="mono" style="font-size:10px;background:rgba(0,0,0,.3);color:${b.color};padding:3px 8px;border-radius:2px;border:1px solid ${b.border}">${actionLabel}</span>
+        ${matchedBadge}
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+      <div style="background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:12px 14px">
+        <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">Submitted Record</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">${recDetails}</div>
+      </div>
+      <div style="background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:12px 14px">
+        <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase;margin-bottom:10px">Field Weight Analysis</div>
+        ${fieldWeightHTML}${matchCompare}
+      </div>
+    </div>
+
+    <div style="background:#040c18;border:1px solid #0f2030;border-radius:4px;padding:14px 16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="width:20px;height:20px;background:#040e1a;border:1px solid #1a3a5a;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:11px">⬡</div>
+        <div class="mono" style="font-size:9px;color:#2a5070;letter-spacing:1.5px;text-transform:uppercase">AI Analysis</div>
+        <span id="ai-loading" class="pulse" style="font-size:10px;color:#2a5070">●●●</span>
+      </div>
+      <div id="ai-text" style="font-size:11px;color:#5a8090;line-height:1.8" class="mono"></div>
+    </div>
+  </div>`;
+
+  document.getElementById("state-result").innerHTML=html;
+  showState("result");
+  btn.disabled=false; btn.innerHTML="⬡ Validate &amp; Submit Record";
+
+  // AI analysis
+  try{
+    const prompt=`You are a cloud infrastructure data quality AI. Analyze this cloud resource record and its redundancy classification. Be concise — 3 sentences max.\n\nInstance ID: ${f.instanceId} | Service: ${f.service} | Region: ${f.region}\nCPU: ${f.cpuUsage}% | Memory: ${f.memoryUsage}% | Storage: ${f.storageGB}GB | Status: ${f.status}\nClassification: ${cls.type.replace(/_/g," ").toUpperCase()} (${Math.round(cls.score*100)}% similarity)\nReason: ${cls.reason}${cls.matchId?" | Matched: "+cls.matchId:""}\n\nBriefly state: what this classification means, whether action is needed, and one clear recommendation.`;
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:prompt}]})});
+    const data=await res.json();
+    const txt=data.content?.map(b=>b.text||"").join("")||"";
+    document.getElementById("ai-loading").style.display="none";
+    document.getElementById("ai-text").textContent=txt;
+  }catch{
+    document.getElementById("ai-loading").style.display="none";
+    document.getElementById("ai-text").textContent="AI analysis unavailable.";
+  }
+}
+
+/* ─── Purge ─── */
+async function handlePurge(){
+  const seen=new Set();
+  const cleaned=db.filter(r=>{if(seen.has(r.hash))return false;seen.add(r.hash);return true;});
+  const removed=db.length-cleaned.length;
+  db=cleaned;
+  auditLog.unshift({time:new Date().toISOString(),instanceId:"SYSTEM",service:"PURGE",region:"—",type:"cleanup",score:1});
+  auditLog=auditLog.slice(0,100);
+  updateHeader(); renderDB(); renderAnalytics();
+
+  const html=`<div class="fade-in" style="background:#0a1018;border:1px solid #501515;border-radius:4px;padding:20px" id="purge-result">
+    <div class="raj" style="font-size:16px;color:#ff6b6b;letter-spacing:2px;text-transform:uppercase;margin-bottom:8px">Bulk Deduplication Complete</div>
+    <div style="display:flex;gap:24px;margin-bottom:12px">
+      <div><div class="raj" style="font-size:28px;font-weight:700;color:#ff6b6b">${removed}</div><div class="mono" style="font-size:9px;color:#5a2020;letter-spacing:1px">DUPLICATES REMOVED</div></div>
+      <div><div class="raj" style="font-size:28px;font-weight:700;color:#44ee88">${cleaned.length}</div><div class="mono" style="font-size:9px;color:#2a5030;letter-spacing:1px">RECORDS REMAINING</div></div>
+    </div>
+    <div id="purge-ai-loading" style="display:flex;gap:5px"><div class="pulse" style="width:6px;height:6px;border-radius:50%;background:#2a5060"></div><div class="pulse" style="width:6px;height:6px;border-radius:50%;background:#2a5060;animation-delay:.2s"></div><div class="pulse" style="width:6px;height:6px;border-radius:50%;background:#2a5060;animation-delay:.4s"></div></div>
+    <div id="purge-ai-text" class="mono" style="font-size:11px;color:#4a7080;line-height:1.7"></div>
+  </div>`;
+  document.getElementById("state-result").innerHTML=html;
+  showState("result");
+
+  try{
+    const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1000,messages:[{role:"user",content:`You are a cloud data quality expert. Bulk deduplication was run: ${removed} duplicates removed, ${cleaned.length} unique records remain. In 2-3 sentences, summarize the impact on database integrity and storage efficiency.`}]})});
+    const data=await res.json();
+    document.getElementById("purge-ai-loading").style.display="none";
+    document.getElementById("purge-ai-text").textContent=data.content?.map(b=>b.text||"").join("")||"";
+  }catch{
+    document.getElementById("purge-ai-loading").style.display="none";
+  }
+}
+
+/* ─── Init ─── */
+renderDB(); renderAnalytics(); updateHeader();
+showState("idle");
+</script>
+</body>
+</html>
